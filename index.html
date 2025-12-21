@@ -2,100 +2,146 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Robô Falante - Versão Linux Fix</title>
+    <title>Robô Controller V8</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 20px; background-color: #f0f0f0; }
-        button { padding: 15px 30px; font-size: 18px; cursor: pointer; border-radius: 8px; border: none; margin: 10px; width: 80%; max-width: 300px; }
-        .btn-conectar { background-color: #007bff; color: white; }
-        .btn-falar { background-color: #28a745; color: white; }
-        .btn-teste { background-color: #ffc107; color: black; font-weight: bold; }
-        textarea { width: 80%; height: 100px; font-size: 18px; margin: 20px 0; padding: 10px; }
-        #status { margin-top: 20px; font-weight: bold; color: #555; }
+        body { font-family: 'Segoe UI', sans-serif; text-align: center; padding: 10px; background-color: #222; color: white; }
         
-        #debug-log {
-            margin-top: 30px;
-            background-color: #000;
-            color: #0f0;
-            font-family: monospace;
-            padding: 10px;
-            text-align: left;
-            height: 250px;
-            overflow-y: scroll;
-            border-radius: 5px;
-            border: 2px solid #555;
-            font-size: 12px;
-        }
+        /* Estilo dos Botões */
+        button { padding: 12px 20px; font-size: 16px; cursor: pointer; border-radius: 8px; border: none; margin: 8px; width: 90%; max-width: 350px; font-weight: bold; transition: 0.2s; }
+        .btn-conectar { background-color: #007bff; color: white; }
+        .btn-falar { background-color: #28a745; color: white; font-size: 20px; }
+        .btn-robo { background-color: #6c757d; color: white; width: 45%; display: inline-block; }
+        .btn-normal { background-color: #17a2b8; color: white; width: 45%; display: inline-block; }
+        
+        /* Caixas de Entrada */
+        textarea { width: 90%; max-width: 350px; height: 80px; font-size: 18px; margin: 15px 0; padding: 10px; border-radius: 5px; border: none; }
+        select { width: 90%; max-width: 350px; padding: 10px; margin-bottom: 15px; font-size: 14px; border-radius: 5px; }
+        
+        /* Sliders */
+        .control-group { background: #333; padding: 10px; margin: 10px auto; border-radius: 8px; max-width: 350px; text-align: left; }
+        label { display: block; margin-bottom: 5px; font-size: 14px; color: #ccc; }
+        input[type=range] { width: 100%; }
+        
+        #status { margin-top: 10px; font-weight: bold; color: #888; }
+        #debug-log { display: none; } /* Escondi o debug para ficar limpo, mas ele existe */
     </style>
 </head>
 <body>
 
-    <h1>🤖 Robô Falante (Linux Fix)</h1>
+    <h2>🤖 Painel de Controle</h2>
 
-    <button class="btn-conectar" onclick="conectarBluetooth()">1. Conectar Bluetooth</button>
-    <br>
-    
-    <div id="status">Status: Desconectado</div>
-    
-    <textarea id="textoFala" placeholder="Digite aqui o que o robô vai falar..."></textarea>
-    <br>
-    
-    <button class="btn-falar" onclick="falar()">2. Falar e Mexer</button>
-    <br>
-    <button class="btn-teste" onclick="testeDireto()">3. Teste Rápido (Envia '3')</button>
+    <button class="btn-conectar" onclick="conectarBluetooth()">🔌 1. Conectar Bluetooth</button>
+    <div id="status">Status: Desconectado 🔴</div>
 
-    <h3>Painel de Debug:</h3>
-    <div id="debug-log">Aguardando...</div>
+    <hr style="border-color: #444; width: 90%;">
+
+    <div class="control-group">
+        <label>🗣️ Voz:</label>
+        <select id="listaVozes"></select>
+        
+        <label>⚡ Velocidade: <span id="valRate">1.0</span></label>
+        <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1" oninput="atualizarLabels()">
+        
+        <label>🎵 Tom (Pitch): <span id="valPitch">1.0</span></label>
+        <input type="range" id="pitch" min="0.1" max="2" step="0.1" value="1" oninput="atualizarLabels()">
+        
+        <div style="text-align: center; margin-top: 10px;">
+            <button class="btn-robo" onclick="modoRobo()">🤖 Robô</button>
+            <button class="btn-normal" onclick="modoNormal()">🙂 Normal</button>
+        </div>
+    </div>
+
+    <textarea id="textoFala" placeholder="O que eu devo falar?"></textarea>
+    <br>
+    
+    <button class="btn-falar" onclick="falar()">🗣️ 2. FALAR</button>
 
     <script>
+        // --- CONFIGURAÇÃO BLUETOOTH (V7 - Brutal) ---
         let dispositivoBluetooth;
         let caracteristicaEscrita;
-        
-        // UUIDs Padrão Nordic UART
         const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-        const UART_RX_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // RX (Micro:bit recebe)
+        const UART_RX_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
-        function log(msg) {
-            const logDiv = document.getElementById('debug-log');
-            const linha = document.createElement('div');
-            const hora = new Date().toLocaleTimeString();
-            linha.innerText = `[${hora}] ${msg}`;
-            logDiv.appendChild(linha);
-            logDiv.scrollTop = logDiv.scrollHeight;
+        // --- PREPARAÇÃO DE VOZES ---
+        let vozesDisponiveis = [];
+        const synth = window.speechSynthesis;
+
+        // Carrega as vozes assim que o navegador permitir
+        window.speechSynthesis.onvoiceschanged = carregarVozes;
+
+        function carregarVozes() {
+            vozesDisponiveis = synth.getVoices();
+            const selectVozes = document.getElementById('listaVozes');
+            selectVozes.innerHTML = '';
+
+            // Filtra vozes brasileiras primeiro, depois as outras
+            vozesDisponiveis.forEach((voz, index) => {
+                const option = document.createElement('option');
+                option.textContent = `${voz.name} (${voz.lang})`;
+                option.value = index;
+                
+                // Tenta selecionar automaticamente a do Google Português
+                if(voz.lang === 'pt-BR') {
+                    option.selected = true;
+                }
+                selectVozes.appendChild(option);
+            });
+        }
+        // Chama uma vez caso o evento onvoiceschanged não dispare
+        carregarVozes();
+
+        function atualizarLabels() {
+            document.getElementById('valRate').innerText = document.getElementById('rate').value;
+            document.getElementById('valPitch').innerText = document.getElementById('pitch').value;
         }
 
+        function modoRobo() {
+            // Configuração clássica de robô: lento e tom grave (ou muito agudo)
+            document.getElementById('rate').value = 0.8;
+            document.getElementById('pitch').value = 0.6; // Tom baixo parece mais robótico
+            atualizarLabels();
+            falar(true); // Fala um teste
+        }
+
+        function modoNormal() {
+            document.getElementById('rate').value = 1.0;
+            document.getElementById('pitch').value = 1.0;
+            atualizarLabels();
+        }
+
+        // --- LÓGICA BLUETOOTH ---
         async function conectarBluetooth() {
             try {
-                log("Iniciando busca...");
-                document.getElementById('status').innerText = "Status: Procurando...";
-                
+                document.getElementById('status').innerText = "Procurando...";
                 dispositivoBluetooth = await navigator.bluetooth.requestDevice({
                     filters: [{ namePrefix: "BBC micro:bit" }],
                     optionalServices: [UART_SERVICE_UUID]
                 });
-
-                log("Conectando ao GATT Server...");
+                
                 const servidor = await dispositivoBluetooth.gatt.connect();
-                
-                log("Obtendo Serviço UART...");
                 const servico = await servidor.getPrimaryService(UART_SERVICE_UUID);
-                
-                log("Obtendo Característica de Escrita (RX)...");
                 caracteristicaEscrita = await servico.getCharacteristic(UART_RX_CHARACTERISTIC_UUID);
 
-                // --- DIAGNÓSTICO DE PROPRIEDADES ---
-                log("🔎 Analisando permissões do Micro:bit:");
-                let props = [];
-                if (caracteristicaEscrita.properties.write) props.push("WRITE (Com Resposta)");
-                if (caracteristicaEscrita.properties.writeWithoutResponse) props.push("WRITE NO RESPONSE (Sem Resposta)");
-                log("Permissões encontradas: " + props.join(", "));
-
                 document.getElementById('status').innerText = "Status: CONECTADO! 🟢";
-                document.getElementById('status').style.color = "green";
-                
+                document.getElementById('status').style.color = "#28a745";
             } catch (error) {
-                log("❌ FALHA CONEXÃO: " + error);
-                document.getElementById('status').innerText = "Erro: " + error;
+                alert("Erro: " + error);
+                document.getElementById('status').innerText = "Erro na conexão 🔴";
+            }
+        }
+
+        async function enviarParaMicrobit(numero) {
+            if (!caracteristicaEscrita) return;
+            try {
+                let encoder = new TextEncoder();
+                // Envia Número + Enter
+                let dados = encoder.encode(numero.toString() + "\n");
+                // Força bruta (WriteWithoutResponse)
+                await caracteristicaEscrita.writeValueWithoutResponse(dados);
+            } catch (error) {
+                console.log("Erro envio: " + error);
             }
         }
 
@@ -109,49 +155,30 @@
             return silabas ? silabas.length : 1;
         }
 
-        async function enviarParaMicrobit(numero) {
-            if (!caracteristicaEscrita) {
-                log("⚠️ Não conectado.");
-                return;
-            }
-
-            try {
-                let encoder = new TextEncoder();
-                let dados = encoder.encode(numero.toString());
-                
-                log(`Enviando '${numero}'...`);
-
-                // --- A CORREÇÃO MÁGICA PARA LINUX ---
-                // Verifica qual método de escrita está disponível
-                if (caracteristicaEscrita.properties.writeWithoutResponse) {
-                    await caracteristicaEscrita.writeValueWithoutResponse(dados);
-                    log("✅ Enviado via 'WriteWithoutResponse' (Rápido)");
-                } else {
-                    await caracteristicaEscrita.writeValue(dados);
-                    log("✅ Enviado via 'Write' (Padrão)");
-                }
-                
-            } catch (error) {
-                log("❌ ERRO FATAL: " + error);
-                log("Tente reiniciar o Micro:bit.");
-            }
-        }
-
-        async function falar() {
+        async function falar(teste = false) {
             let texto = document.getElementById("textoFala").value;
+            if (teste) texto = "Modo Robô Ativado";
             if (!texto) return;
 
+            // 1. Enviar comando motor
             let numSilabas = contarSilabas(texto);
             await enviarParaMicrobit(numSilabas);
 
+            // 2. Configurar Voz
             let fala = new SpeechSynthesisUtterance(texto);
-            fala.lang = "pt-BR";
-            fala.rate = 1.0; 
-            window.speechSynthesis.speak(fala);
-        }
+            
+            // Pega a voz selecionada no menu
+            const indiceVoz = document.getElementById('listaVozes').value;
+            if (vozesDisponiveis[indiceVoz]) {
+                fala.voice = vozesDisponiveis[indiceVoz];
+            } else {
+                fala.lang = "pt-BR"; // Fallback
+            }
 
-        async function testeDireto() {
-            await enviarParaMicrobit(3);
+            fala.rate = parseFloat(document.getElementById('rate').value);
+            fala.pitch = parseFloat(document.getElementById('pitch').value);
+            
+            window.speechSynthesis.speak(fala);
         }
     </script>
 </body>
