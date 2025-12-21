@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Robô V9.2 - Sincronizado (400ms)</title>
+    <title>Robô V9.1 - Sincronizado (300ms)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body { font-family: 'Segoe UI', sans-serif; text-align: center; padding: 10px; background-color: #222; color: white; }
@@ -33,8 +33,8 @@
     <hr style="border-color: #444; width: 90%;">
 
     <div class="control-group">
-        <label>⏳ Sincronia (Atraso Voz): <span id="valDelay">400</span> ms</label>
-        <input type="range" id="delay" min="0" max="1000" step="50" value="400" oninput="atualizarLabels()">
+        <label>⏳ Sincronia (Atraso Voz): <span id="valDelay">300</span> ms</label>
+        <input type="range" id="delay" min="0" max="1000" step="50" value="300" oninput="atualizarLabels()">
         
         <br>
         
@@ -50,4 +50,112 @@
         </div>
     </div>
 
-    <textarea id="textoFala" placeholder="O que eu devo
+    <textarea id="textoFala" placeholder="O que eu devo falar?"></textarea>
+    <br>
+    
+    <button class="btn-falar" onclick="falar()">🗣️ 2. FALAR</button>
+
+    <script>
+        let dispositivoBluetooth;
+        let caracteristicaEscrita;
+        
+        const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+        const UART_RX_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; 
+
+        let vozSelecionada = null;
+
+        window.speechSynthesis.onvoiceschanged = () => {
+            const vozes = window.speechSynthesis.getVoices();
+            vozSelecionada = vozes.find(v => v.lang === 'pt-BR') || null;
+        };
+
+        function atualizarLabels() {
+            document.getElementById('valRate').innerText = document.getElementById('rate').value;
+            document.getElementById('valPitch').innerText = document.getElementById('pitch').value;
+            document.getElementById('valDelay').innerText = document.getElementById('delay').value;
+        }
+
+        function modoRobo() {
+            document.getElementById('rate').value = 0.8;
+            document.getElementById('pitch').value = 0.6;
+            document.getElementById('delay').value = 300; 
+            atualizarLabels();
+            falar(true);
+        }
+
+        function modoNormal() {
+            document.getElementById('rate').value = 1.0;
+            document.getElementById('pitch').value = 1.0;
+            document.getElementById('delay').value = 0;
+            atualizarLabels();
+        }
+
+        async function conectarBluetooth() {
+            try {
+                document.getElementById('status').innerText = "Procurando...";
+                dispositivoBluetooth = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: "BBC micro:bit" }],
+                    optionalServices: [UART_SERVICE_UUID]
+                });
+                
+                const servidor = await dispositivoBluetooth.gatt.connect();
+                const servico = await servidor.getPrimaryService(UART_SERVICE_UUID);
+                caracteristicaEscrita = await servico.getCharacteristic(UART_RX_CHARACTERISTIC_UUID);
+
+                document.getElementById('status').innerText = "Status: CONECTADO! 🟢";
+                document.getElementById('status').style.color = "#28a745";
+            } catch (error) {
+                alert("Erro: " + error);
+                document.getElementById('status').innerText = "Erro na conexão 🔴";
+            }
+        }
+
+        async function enviarParaMicrobit(numero) {
+            if (!caracteristicaEscrita) return;
+            try {
+                let encoder = new TextEncoder();
+                let dados = encoder.encode(numero.toString() + "\n");
+                await caracteristicaEscrita.writeValueWithoutResponse(dados);
+            } catch (error) {
+                console.log("Erro envio: " + error);
+            }
+        }
+
+        function contarSilabas(palavra) {
+            if (!palavra) return 0;
+            palavra = palavra.toLowerCase();
+            if(palavra.length <= 3) return 1;
+            palavra = palavra.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, '');
+            palavra = palavra.replace(/^y/, '');
+            const silabas = palavra.match(/[aeiouy]{1,2}/g);
+            return silabas ? silabas.length : 1;
+        }
+
+        async function falar(teste = false) {
+            let texto = document.getElementById("textoFala").value;
+            if (teste) texto = "Teste de voz";
+            if (!texto) return;
+
+            let numSilabas = contarSilabas(texto);
+            enviarParaMicrobit(numSilabas); 
+
+            let fala = new SpeechSynthesisUtterance(texto);
+            fala.lang = "pt-BR";
+            if (vozSelecionada) fala.voice = vozSelecionada;
+
+            fala.rate = parseFloat(document.getElementById('rate').value);
+            fala.pitch = parseFloat(document.getElementById('pitch').value);
+            
+            let atraso = parseInt(document.getElementById('delay').value);
+
+            if (atraso > 0) {
+                setTimeout(() => {
+                    window.speechSynthesis.speak(fala);
+                }, atraso);
+            } else {
+                window.speechSynthesis.speak(fala);
+            }
+        }
+    </script>
+</body>
+</html>
