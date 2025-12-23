@@ -2,10 +2,10 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Robô V9.2 - Sincronizado (400ms)</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robô V10.2 - D-Pad Funcional</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        body { font-family: 'Segoe UI', sans-serif; text-align: center; padding: 10px; background-color: #222; color: white; }
+        body { font-family: 'Segoe UI', sans-serif; text-align: center; padding: 10px; background-color: #222; color: white; touch-action: manipulation; }
         
         button { padding: 12px 20px; font-size: 16px; cursor: pointer; border-radius: 8px; border: none; margin: 8px; width: 90%; max-width: 350px; font-weight: bold; transition: 0.2s; }
         .btn-conectar { background-color: #007bff; color: white; }
@@ -13,6 +13,37 @@
         .btn-robo { background-color: #6c757d; color: white; width: 45%; display: inline-block; }
         .btn-normal { background-color: #17a2b8; color: white; width: 45%; display: inline-block; }
         
+        /* ESTILO DO DIRECIONAL */
+        .dpad-container {
+            margin: 20px auto;
+            max-width: 250px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #333;
+            padding: 15px;
+            border-radius: 20px;
+        }
+        .dpad-row { display: flex; justify-content: center; width: 100%; }
+        
+        .btn-dir {
+            width: 70px !important;
+            height: 70px;
+            font-size: 30px;
+            margin: 5px;
+            border-radius: 50%;
+            background-color: #555;
+            box-shadow: 0 4px 0 #222;
+            /* Impede seleção de texto ao segurar */
+            -webkit-user-select: none;
+            user-select: none; 
+        }
+        .btn-dir:active {
+            background-color: #ff9800;
+            box-shadow: 0 2px 0 #222;
+            transform: translateY(2px);
+        }
+
         textarea { width: 90%; max-width: 350px; height: 80px; font-size: 18px; margin: 15px 0; padding: 10px; border-radius: 5px; border: none; }
         
         .control-group { background: #333; padding: 10px; margin: 10px auto; border-radius: 8px; max-width: 350px; text-align: left; }
@@ -25,7 +56,7 @@
 </head>
 <body>
 
-    <h2>🤖 Painel de Controle</h2>
+    <h2>🤖 Painel V10.2</h2>
 
     <button class="btn-conectar" onclick="conectarBluetooth()">🔌 1. Conectar Bluetooth</button>
     <div id="status">Status: Desconectado 🔴</div>
@@ -33,29 +64,48 @@
     <hr style="border-color: #444; width: 90%;">
 
     <div class="control-group">
-        <label>⏳ Sincronia (Atraso Voz): <span id="valDelay">400</span> ms</label>
+        <label>⏳ Sincronia: <span id="valDelay">400</span> ms</label>
         <input type="range" id="delay" min="0" max="1000" step="50" value="400" oninput="atualizarLabels()">
-        
         <br>
-        
         <label>⚡ Velocidade: <span id="valRate">1.0</span></label>
         <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1" oninput="atualizarLabels()">
-        
-        <label>🎵 Tom (Pitch): <span id="valPitch">1.0</span></label>
+        <label>🎵 Tom: <span id="valPitch">1.0</span></label>
         <input type="range" id="pitch" min="0.1" max="2" step="0.1" value="1" oninput="atualizarLabels()">
-        
         <div style="text-align: center; margin-top: 15px;">
             <button class="btn-robo" onclick="modoRobo()">🤖 Robô</button>
             <button class="btn-normal" onclick="modoNormal()">🙂 Normal</button>
         </div>
     </div>
 
+    <div class="dpad-container">
+        <div class="dpad-row">
+            <button class="btn-dir" 
+                onmousedown="mover('F')" onmouseup="parar()" 
+                ontouchstart="mover('F')" ontouchend="parar()">⬆️</button>
+        </div>
+        <div class="dpad-row">
+            <button class="btn-dir" 
+                onmousedown="mover('L')" onmouseup="parar()" 
+                ontouchstart="mover('L')" ontouchend="parar()">⬅️</button>
+            
+            <button class="btn-dir" 
+                onmousedown="mover('R')" onmouseup="parar()" 
+                ontouchstart="mover('R')" ontouchend="parar()">➡️</button>
+        </div>
+        <div class="dpad-row">
+            <button class="btn-dir" 
+                onmousedown="mover('B')" onmouseup="parar()" 
+                ontouchstart="mover('B')" ontouchend="parar()">⬇️</button>
+        </div>
+    </div>
+
     <textarea id="textoFala" placeholder="O que eu devo falar?"></textarea>
     <br>
-    
     <button class="btn-falar" onclick="falar()">🗣️ 2. FALAR</button>
 
     <script>
+        console.log("Script Carregado OK"); // Prova de vida no Console
+
         let dispositivoBluetooth;
         let caracteristicaEscrita;
         
@@ -64,11 +114,13 @@
 
         let vozSelecionada = null;
 
+        // --- CARREGAMENTO DE VOZ ---
         window.speechSynthesis.onvoiceschanged = () => {
             const vozes = window.speechSynthesis.getVoices();
             vozSelecionada = vozes.find(v => v.lang === 'pt-BR') || null;
         };
 
+        // --- ATUALIZAÇÃO VISUAL ---
         function atualizarLabels() {
             document.getElementById('valRate').innerText = document.getElementById('rate').value;
             document.getElementById('valPitch').innerText = document.getElementById('pitch').value;
@@ -90,9 +142,31 @@
             atualizarLabels();
         }
 
+        // --- FUNÇÕES DE MOVIMENTO (CORRIGIDAS) ---
+        function mover(cmd) {
+            // Evita erro se o evento não existir
+            if(window.event && window.event.cancelable) window.event.preventDefault();
+            console.log("Mover: " + cmd);
+            enviarParaMicrobit(cmd);
+        }
+
+        function parar() {
+            if(window.event && window.event.cancelable) window.event.preventDefault();
+            console.log("Parar");
+            enviarParaMicrobit('S');
+        }
+
+        // --- BLUETOOTH ---
         async function conectarBluetooth() {
+            // Verifica suporte
+            if (!navigator.bluetooth) {
+                alert("Navegador sem suporte a Bluetooth Web.");
+                return;
+            }
+
             try {
                 document.getElementById('status').innerText = "Procurando...";
+                
                 dispositivoBluetooth = await navigator.bluetooth.requestDevice({
                     filters: [{ namePrefix: "BBC micro:bit" }],
                     optionalServices: [UART_SERVICE_UUID]
@@ -104,23 +178,29 @@
 
                 document.getElementById('status').innerText = "Status: CONECTADO! 🟢";
                 document.getElementById('status').style.color = "#28a745";
+                
             } catch (error) {
-                alert("Erro: " + error);
-                document.getElementById('status').innerText = "Erro na conexão 🔴";
+                console.log(error);
+                // Não mostra alerta se o usuário só cancelou a janela
+                if (!error.toString().includes("cancelled")) {
+                    alert("Erro Bluetooth: " + error);
+                }
+                document.getElementById('status').innerText = "Erro Conexão 🔴";
             }
         }
 
-        async function enviarParaMicrobit(numero) {
+        async function enviarParaMicrobit(dado) {
             if (!caracteristicaEscrita) return;
             try {
                 let encoder = new TextEncoder();
-                let dados = encoder.encode(numero.toString() + "\n");
-                await caracteristicaEscrita.writeValueWithoutResponse(dados);
+                let payload = encoder.encode(dado.toString() + "\n");
+                await caracteristicaEscrita.writeValueWithoutResponse(payload);
             } catch (error) {
                 console.log("Erro envio: " + error);
             }
         }
 
+        // --- FALA ---
         function contarSilabas(palavra) {
             if (!palavra) return 0;
             palavra = palavra.toLowerCase();
